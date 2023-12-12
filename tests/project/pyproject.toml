@@ -1,0 +1,10 @@
+[project]
+dependencies = [
+    "requests==2.24.0",
+]
+requires-python = ">=3.8"
+
+[[tool.pdm.source]]
+url = "../packages"
+name = "pypi"
+type = "find_links"

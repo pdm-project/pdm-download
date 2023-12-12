@@ -1,0 +1,25 @@
+[project]
+name = "pdm-download"
+version = "0.0.1"
+description = "A PDM plugin to download all packages in a lockfile for offline use."
+authors = [
+    {name = "Frost Ming", email = "me@frostming.com"},
+]
+dependencies = [
+    "rich>=13",
+]
+requires-python = ">=3.8"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.entry-points.pdm]
+download = "pdm_download:main"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "pdm[pytest]>=2.10",
+]
