@@ -166,13 +166,13 @@ def _get_file_hashes(
                 )
                 if match_hash:
                     can_hashes.remove(match_hash)
-                hashes.append(
-                    {
-                        "url": package.link.url_without_fragment,
-                        "file": filename,
-                        "hash": match_hash["hash"],
-                    }
-                )
+                    hashes.append(
+                        {
+                            "url": package.link.url_without_fragment,
+                            "file": filename,
+                            "hash": match_hash["hash"],
+                        }
+                    )
 
             for item in can_hashes:
                 project.core.ui.echo(
