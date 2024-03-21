@@ -5,7 +5,7 @@ import hashlib
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, Sequence, cast
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Sequence, cast
 
 from pdm import termui
 from pdm.cli.commands.base import BaseCommand
@@ -32,6 +32,12 @@ if TYPE_CHECKING:
         file: str
 
 
+def _iter_content_compat(resp: Any, chunk_size: int) -> Iterator[bytes]:
+    if hasattr(resp, "iter_content"):
+        return resp.iter_content(chunk_size)
+    return resp.iter_bytes(chunk_size)
+
+
 def _download_package(project: Project, package: FileHash, dest: Path) -> None:
     from unearth import Link
 
@@ -43,7 +49,7 @@ def _download_package(project: Project, package: FileHash, dest: Path) -> None:
             package.get("file", Link(package["url"]).filename)
         ).open("wb") as fp:
             resp.raise_for_status()
-            for chunk in resp.iter_content(chunk_size=8192):
+            for chunk in _iter_content_compat(resp, chunk_size=8192):
                 hasher.update(chunk)
                 fp.write(chunk)
     if hasher.hexdigest() != hash_value:
