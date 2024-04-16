@@ -7,7 +7,6 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Iterator, Sequence, cast
 
-from pdm import termui
 from pdm.cli.commands.base import BaseCommand
 from pdm.cli.options import lockfile_option
 from pdm.exceptions import PdmUsageError
@@ -76,7 +75,6 @@ def _download_packages(
         "•",
         TaskProgressColumn(),
         transient=True,
-        console=termui._console,
     ) as progress:
         task = progress.add_task("Downloading", total=len(packages))
         success_count = 0
