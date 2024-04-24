@@ -20,8 +20,9 @@ from rich.progress import (
 )
 
 if TYPE_CHECKING:
-    from typing import TypedDict
+    from typing import ContextManager, TypedDict
 
+    from httpx import Client, Response
     from pdm.models.candidates import Candidate
     from pdm.project import Project
 
@@ -37,6 +38,14 @@ def _iter_content_compat(resp: Any, chunk_size: int) -> Iterator[bytes]:
     return resp.iter_bytes(chunk_size)
 
 
+def _stream_compat(
+    session: Client, url: str, **kwargs: Any
+) -> ContextManager[Response]:
+    if hasattr(session, "stream"):
+        return session.stream("GET", url, **kwargs)
+    return session.get(url, stream=True, **kwargs)
+
+
 def _download_package(project: Project, package: FileHash, dest: Path) -> None:
     from unearth import Link
 
@@ -44,7 +53,7 @@ def _download_package(project: Project, package: FileHash, dest: Path) -> None:
     hasher = hashlib.new(hash_name)
     with project.environment.get_finder() as finder:
         session = finder.session
-        with session.get(package["url"], stream=True) as resp, dest.joinpath(
+        with _stream_compat(session, package["url"]) as resp, dest.joinpath(
             package.get("file", Link(package["url"]).filename)
         ).open("wb") as fp:
             resp.raise_for_status()

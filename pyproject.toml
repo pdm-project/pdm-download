@@ -35,5 +35,5 @@ source = "scm"
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "pdm[pytest]>=2.10",
+    "pdm[pytest]>=2.13",
 ]
