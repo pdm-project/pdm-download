@@ -119,12 +119,14 @@ class Download(BaseCommand):
         )
 
     def handle(self, project: Project, options: argparse.Namespace) -> None:
+        from itertools import chain
+
         if not project.lockfile.exists():
             raise PdmUsageError(
                 f"The lockfile '{options.lockfile or 'pdm.lock'}' doesn't exist."
             )
-        locked_repository = project.locked_repository
-        all_candidates = locked_repository.all_candidates.values()
+        locked_repository = project.get_locked_repository()
+        all_candidates = chain.from_iterable(locked_repository.all_candidates.values())
         if "static_urls" in project.lockfile.strategy:
             hashes = cast(
                 "list[FileHash]",
@@ -165,7 +167,7 @@ def _get_file_hashes(
         if req.is_named and respect_source_order and comes_from:
             sources = [s for s in sources if comes_from.startswith(s.url)]
         with project.environment.get_finder(
-            sources, ignore_compatibility=True
+            sources, env_spec=project.environment.allow_all_spec
         ) as finder:
             for package in finder.find_matches(
                 req.as_line(),
