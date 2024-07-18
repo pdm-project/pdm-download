@@ -29,4 +29,8 @@ Options:
   -p PROJECT_PATH, --project PROJECT_PATH
                         Specify another path as the project root, which changes the base of pyproject.toml and __pypackages__ [env var: PDM_PROJECT]
   -d DEST, --dest DEST  The destination directory, default to './packages'
+  --python PYTHON       Download packages for the given Python range. E.g. '>=3.9'
+  --platform PLATFORM   Download packages for the given platform. E.g. 'linux'
+  --implementation IMPLEMENTATION
+                        Download packages for the given implementation. E.g. 'cpython', 'pypy'
 ```

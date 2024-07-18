@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
 
     from httpx import Client, Response
     from pdm.models.candidates import Candidate
+    from pdm.models.markers import EnvSpec
     from pdm.project import Project
 
     class FileHash(TypedDict):
@@ -117,16 +119,80 @@ class Download(BaseCommand):
             default="./packages",
             type=Path,
         )
+        parser.add_argument(
+            "--python",
+            help="Download packages for the given Python range. E.g. '>=3.9'",
+        )
+        parser.add_argument(
+            "--platform", help="Download packages for the given platform. E.g. 'linux'"
+        )
+        parser.add_argument(
+            "--implementation",
+            help="Download packages for the given implementation. E.g. 'cpython', 'pypy'",
+        )
+
+    @staticmethod
+    def _check_lock_targets(project: Project, env_spec: EnvSpec) -> None:
+        from dep_logic.tags import EnvCompatibility
+        from pdm.exceptions import PdmException
+
+        lock_targets = project.get_locked_repository().targets
+        ui = project.core.ui
+        if env_spec in lock_targets:
+            return
+        compatibilities = [target.compare(env_spec) for target in lock_targets]
+        if any(compat == EnvCompatibility.LOWER_OR_EQUAL for compat in compatibilities):
+            return
+        loose_compatible_target = next(
+            (
+                target
+                for (target, compat) in zip(lock_targets, compatibilities)
+                if compat == EnvCompatibility.HIGHER
+            ),
+            None,
+        )
+        if loose_compatible_target is not None:
+            ui.warn(
+                f"Found lock target {loose_compatible_target}, installing for env {env_spec}"
+            )
+        else:
+            errors = [
+                f"None of the lock targets matches the current env {env_spec}:"
+            ] + [f" - {target}" for target in lock_targets]
+            ui.error("\n".join(errors))
+            raise PdmException("No compatible lock target found")
 
     def handle(self, project: Project, options: argparse.Namespace) -> None:
         from itertools import chain
+
+        from pdm.models.specifiers import PySpecSet
+
+        env_spec = project.environment.allow_all_spec
+
+        if any([options.python, options.platform, options.implementation]):
+            replace_dict = {}
+            if options.python:
+                if re.match(r"[\d.]+", options.python):
+                    options.python = f">={options.python}"
+                replace_dict["requires_python"] = PySpecSet(options.python)
+            if options.platform:
+                replace_dict["platform"] = options.platform
+            if options.implementation:
+                replace_dict["implementation"] = options.implementation
+            env_spec = env_spec.replace(**replace_dict)
 
         if not project.lockfile.exists():
             raise PdmUsageError(
                 f"The lockfile '{options.lockfile or 'pdm.lock'}' doesn't exist."
             )
+        self._check_lock_targets(project, env_spec)
         locked_repository = project.get_locked_repository()
         all_candidates = chain.from_iterable(locked_repository.all_candidates.values())
+        all_candidates = [
+            c
+            for c in all_candidates
+            if c.req.marker is None or c.req.marker.matches(env_spec)
+        ]
         if "static_urls" in project.lockfile.strategy:
             hashes = cast(
                 "list[FileHash]",
@@ -137,7 +203,7 @@ class Download(BaseCommand):
                 ],
             )
         else:
-            hashes = _get_file_hashes(project, all_candidates)
+            hashes = _get_file_hashes(project, all_candidates, env_spec)
         _download_packages(project, hashes, options.dest)
 
 
@@ -150,7 +216,7 @@ def _convert_hash_option(hashes: list[FileHash]) -> dict[str, list[str]]:
 
 
 def _get_file_hashes(
-    project: Project, candidates: Iterable[Candidate]
+    project: Project, candidates: Iterable[Candidate], env_spec: EnvSpec
 ) -> list[FileHash]:
     hashes: list[FileHash] = []
     repository = project.get_repository()
@@ -166,9 +232,7 @@ def _get_file_hashes(
         comes_from = candidate.link.comes_from if candidate.link else None
         if req.is_named and respect_source_order and comes_from:
             sources = [s for s in sources if comes_from.startswith(s.url)]
-        with project.environment.get_finder(
-            sources, env_spec=project.environment.allow_all_spec
-        ) as finder:
+        with project.environment.get_finder(sources, env_spec=env_spec) as finder:
             for package in finder.find_matches(
                 req.as_line(),
                 allow_yanked=True,
